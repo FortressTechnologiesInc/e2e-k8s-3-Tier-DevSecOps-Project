@@ -82,18 +82,18 @@ pipeline {
         }
         stage('Checkout Code') {
             steps {
-                git credentialsId: 'GITHUB', url: 'https://github.com/AmanPathak-DevOps/End-to-End-Kubernetes-Three-Tier-DevSecOps-Project.git'
+                git credentialsId: 'master', url: 'https://github.com/FortressTechnologiesInc/e2e-k8s-3-Tier-DevSecOps-Project.git'
             }
         }
         stage('Update Deployment file') {
             environment {
-                GIT_REPO_NAME = "e2e-K8s-3Tier-DevSecOps-Project"
-                GIT_USER_NAME = "AmanPathak-DevOps"
+                GIT_REPO_NAME = "e2e-K8s-3-Tier-DevSecOps-Project"
+                GIT_USER_NAME = "FortressTechnologiesInc"
             }
             stage('16 K8') {
             steps {
                 withKubeConfig(caCertificate: '', clusterName: 'minikube', contextName: '', credentialsId: 'spjt', namespace: '3tier', restrictKubeConfigAccess: false, serverUrl: 'https://192.168.49.2:8443') {
-                    sh  "kubectl apply -f deploymentservice.yml -n 3tier"
+                    sh  "kubectl apply -f /kubernetes-Manifests-file/deploymentservice.yml -n 3tier"
                     sh "kubectl get pods -n 3tier"
                     sh "kubectl get svc -n 3tier"
                 }
