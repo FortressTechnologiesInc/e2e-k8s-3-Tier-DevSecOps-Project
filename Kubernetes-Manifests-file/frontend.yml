@@ -22,16 +22,16 @@ spec:
         role: frontend
     spec:
       imagePullSecrets:
-      - name: ecr-registry-secret
+        - name: ecr-registry-secret
       containers:
-      - name: frontend
-        image: limkel/3tier-frontend:1.0
-        imagePullPolicy: Always
-        env:
-        - name: REACT_APP_BACKEND_URL
-          value: "http://backend.amanpathakdevops.study/api/tasks"
-        ports:
-        - containerPort: 3000
+        - name: frontend
+          image: limkel/3tier-frontend:1.0
+          imagePullPolicy: Always
+          env:
+            - name: REACT_APP_BACKEND_URL
+              value: "http://backend.amanpathakdevops.study/api/tasks"
+          ports:
+            - containerPort: 3000
 ---
 apiVersion: v1
 kind: Service
@@ -40,8 +40,8 @@ metadata:
   namespace: three-tier
 spec:
   ports:
-  - port: 3000
-    protocol: TCP
+    - port: 3000
+      protocol: TCP
   type: ClusterIP
   selector:
     role: frontend
