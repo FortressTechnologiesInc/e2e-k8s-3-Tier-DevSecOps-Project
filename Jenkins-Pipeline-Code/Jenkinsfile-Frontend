@@ -5,12 +5,9 @@ pipeline {
         nodejs 'nodejs'
     }
     environment  {
-        SCANNER_HOME=tool 'sonar-scanner'
-        AWS_ACCOUNT_ID = credentials('ACCOUNT_ID')
-        AWS_ECR_REPO_NAME = credentials('ECR_REPO1')
-        AWS_DEFAULT_REGION = 'us-east-1'
-        REPOSITORY_URI = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/"
-    }
+        SCANNER_HOME=tool 'scanner'
+        
+}
     stages {
         stage('Cleaning Workspace') {
             steps {
@@ -25,10 +22,10 @@ pipeline {
         stage('Sonarqube Analysis') {
             steps {
                 dir('Application-Code/frontend') {
-                    withSonarQubeEnv('sonar-server') {
+                    withSonarQubeEnv('sonar') {
                         sh ''' $SCANNER_HOME/bin/sonar-scanner \
-                        -Dsonar.projectName=three-tier-frontend \
-                        -Dsonar.projectKey=three-tier-frontend '''
+                        -Dsonar.projectName=3tier-frontend \
+                        -Dsonar.projectKey=3tier-frontend '''
                     }
                 }
             }
@@ -36,7 +33,7 @@ pipeline {
         stage('Quality Check') {
             steps {
                 script {
-                    waitForQualityGate abortPipeline: false, credentialsId: 'sonar-token' 
+                    waitForQualityGate abortPipeline: false, credentialsId: 'sonar' 
                 }
             }
         }
@@ -55,29 +52,32 @@ pipeline {
                 }
             }
         }
+
         stage("Docker Image Build") {
             steps {
                 script {
+                    withDockerRegistry(credentialsId: 'docker', toolName: 'docker')
                     dir('Application-Code/frontend') {
                             sh 'docker system prune -f'
                             sh 'docker container prune -f'
-                            sh 'docker build -t ${AWS_ECR_REPO_NAME} .'
+                            sh 'docker build -t limkel/3tier-frontend:1.0 .'
                     }
                 }
             }
         }
-        stage("ECR Image Pushing") {
+        stage('Docker Push Image') {
             steps {
                 script {
-                        sh 'aws ecr get-login-password --region ${AWS_DEFAULT_REGION} | docker login --username AWS --password-stdin ${REPOSITORY_URI}'
-                        sh 'docker tag ${AWS_ECR_REPO_NAME} ${REPOSITORY_URI}${AWS_ECR_REPO_NAME}:${BUILD_NUMBER}'
-                        sh 'docker push ${REPOSITORY_URI}${AWS_ECR_REPO_NAME}:${BUILD_NUMBER}'
+                    withDockerRegistry(credentialsId: 'docker', toolName: 'docker') {
+                        sh "docker push limkel/3tier-frontend:1.0"
+                        sh "docker rmi -f limkel/3tier-frontend:1.0"
+                    }
                 }
             }
         }
         stage("TRIVY Image Scan") {
             steps {
-                sh 'trivy image ${REPOSITORY_URI}${AWS_ECR_REPO_NAME}:${BUILD_NUMBER} > trivyimage.txt' 
+                sh 'trivy image limkel/3tier-frontend:1.0 > trivyimage.txt' 
             }
         }
         stage('Checkout Code') {
@@ -85,29 +85,21 @@ pipeline {
                 git credentialsId: 'GITHUB', url: 'https://github.com/AmanPathak-DevOps/End-to-End-Kubernetes-Three-Tier-DevSecOps-Project.git'
             }
         }
-        stage('Update Deployment file') {
-            environment {
-                GIT_REPO_NAME = "End-to-End-Kubernetes-Three-Tier-DevSecOps-Project"
-                GIT_USER_NAME = "AmanPathak-DevOps"
-            }
+        
+            stage('16 K8') {
             steps {
-                dir('Kubernetes-Manifests-file/Frontend') {
-                    withCredentials([string(credentialsId: 'github', variable: 'GITHUB_TOKEN')]) {
-                        sh '''
-                            git config user.email "aman07pathak@gmail.com"
-                            git config user.name "AmanPathak-DevOps"
-                            BUILD_NUMBER=${BUILD_NUMBER}
-                            echo $BUILD_NUMBER
-                            imageTag=$(grep -oP '(?<=frontend:)[^ ]+' deployment.yaml)
-                            echo $imageTag
-                            sed -i "s/${AWS_ECR_REPO_NAME}:${imageTag}/${AWS_ECR_REPO_NAME}:${BUILD_NUMBER}/" deployment.yaml
-                            git add deployment.yaml
-                            git commit -m "Update deployment Image to version \${BUILD_NUMBER}"
-                            git push https://${GITHUB_TOKEN}@github.com/${GIT_USER_NAME}/${GIT_REPO_NAME} HEAD:master
-                        '''
-                    }
+                withKubeConfig(caCertificate: '', clusterName: 'minikube', contextName: '', credentialsId: 'spjt', namespace: '3tier', restrictKubeConfigAccess: false, serverUrl: 'https://192.168.49.2:8443') {
+                    sh  "kubectl apply -f Kubernetes-Manifests-file/Frontend/deploymentservice.yml -n 3tier"
+                    sh "kubectl get pods -n 3tier"
+                    sh "kubectl get svc -n 3tier"
                 }
             }
         }
-    }
+        stage('16.1 Clean Workspace') {
+            steps {
+                cleanWs()
+            }
+        }
 }
+}
+           
