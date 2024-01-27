@@ -98,7 +98,9 @@ pipeline {
         stage('Deploy to Kubernetes') {
             steps {
                 withKubeConfig(caCertificate: '', clusterName: 'minikube', contextName: '', credentialsId: 'spjt', namespace: '3tier', restrictKubeConfigAccess: false, serverUrl: 'https://192.168.49.2:8443') {
-                    sh "kubectl apply -f Kubernetes-Manifests-file/Frontend/deploymentservice.yml -n 3tier"
+                    sh "kubectl apply -f Kubernetes-Manifests-file/frontend.yml -n 3tier"
+                    sh "kubectl apply -f Kubernetes-Manifests-file/mysvc.yml -n 3tier"
+                    sh "kubectl apply -f Kubernetes-Manifests-file/ingress.yaml -n 3tier"
                     sh "kubectl get pods -n 3tier"
                     sh "kubectl get svc -n 3tier"
                 }
