@@ -1,8 +1,9 @@
+---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: mainlb
-  namespace: three-tier
+  namespace: 3tier
   annotations:
     alb.ingress.kubernetes.io/scheme: internet-facing
     alb.ingress.kubernetes.io/target-type: ip
@@ -18,13 +19,12 @@ spec:
             backend:
               service:
                 name: api
-                port:   
+                port:
                   number: 3500
           - path: /
             pathType: Prefix
             backend:
               service:
                 name: frontend
-                port: 
+                port:
                   number: 3000
-      
