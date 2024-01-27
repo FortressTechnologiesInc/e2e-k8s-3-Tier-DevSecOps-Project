@@ -93,7 +93,7 @@ pipeline {
             stage('16 K8') {
             steps {
                 withKubeConfig(caCertificate: '', clusterName: 'minikube', contextName: '', credentialsId: 'spjt', namespace: '3tier', restrictKubeConfigAccess: false, serverUrl: 'https://192.168.49.2:8443') {
-                    sh  "kubectl apply -f /kubernetes-Manifests-file/deploymentservice.yml -n 3tier"
+                    sh  "kubectl apply -f /kubernetes-Manifests-file/backend.yml -n 3tier"
                     sh "kubectl get pods -n 3tier"
                     sh "kubectl get svc -n 3tier"
                 }
