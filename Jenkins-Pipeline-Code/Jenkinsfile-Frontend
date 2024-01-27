@@ -33,18 +33,10 @@ pipeline {
             }
         }
 
-        stage('Quality Check') {
-            steps {
-                script {
-                    waitForQualityGate abortPipeline: false, credentialsId: 'sonar'
-                }
-            }
-        }
-
         stage('OWASP Dependency-Check Scan') {
             steps {
                 dir('Application-Code/frontend') {
-                    dependencyCheck additionalArguments: '--scan ./ --disableYarnAudit --disableNodeAudit', odcInstallation: 'DP-Check'
+                    dependencyCheck additionalArguments: '--scan ./ --disableYarnAudit --disableNodeAudit', odcInstallation: 'DP'
                     dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
                 }
             }
@@ -89,23 +81,13 @@ pipeline {
             }
         }
 
-        stage('Checkout Code') {
-            steps {
-                git credentialsId: 'master', url: 'https://github.com/FortressTechnologiesInc/e2e-k8s-3-Tier-DevSecOps-Project.git'
-            }
-        }
-        stage('Update Deployment file') {
-            environment {
-                GIT_REPO_NAME = "e2e-K8s-3-Tier-DevSecOps-Project"
-                GIT_USER_NAME = "FortressTechnologiesInc"
-            }
-
         stage('Deploy to Kubernetes') {
             steps {
                 withKubeConfig(caCertificate: '', clusterName: 'minikube', contextName: '', credentialsId: 'spjt', namespace: '3tier', restrictKubeConfigAccess: false, serverUrl: 'https://192.168.49.2:8443') {
-                    sh "kubectl apply -f Kubernetes-Manifests-file/frontend.yml -n 3tier"
-                    sh "kubectl apply -f Kubernetes-Manifests-file/mysvc.yml -n 3tier"
-                    sh "kubectl apply -f Kubernetes-Manifests-file/ingress.yaml -n 3tier"
+                    sh "kubectl apply -f /root/appnode/workspace/3tier/Kubernetes-Manifests-file/frontend.yml -n 3tier"
+                    sh "kubectl apply -f /root/appnode/workspace/3tier/Kubernetes-Manifests-file/mysvc.yml -n 3tier"
+                    sh "kubectl apply -f /root/appnode/workspace/3tier/Kubernetes-Manifests-file/ingress.yaml -n 3tier"
+                    sh "kubectl apply -f /root/appnode/workspace/3tier/Kubernetes-Manifests-file/db.yml -n 3tier"
                     sh "kubectl get pods -n 3tier"
                     sh "kubectl get svc -n 3tier"
                 }
