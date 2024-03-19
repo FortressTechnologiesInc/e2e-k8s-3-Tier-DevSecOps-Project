@@ -1,0 +1,252 @@
+YML FOR MONGODB 
+=============================================
+apiVersion: apps/v1
+kind: Deployment
+metadata: 
+  namespace: three-tier
+  name: mongodb
+spec: 
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mongodb
+  template:
+    metadata:
+      labels: 
+        app: mongodb
+    spec: 
+      containers:
+      - name: mon
+        image: mongo:4.4.6
+        command:
+            - "numactl"
+            - "--interleave=all"
+            - "mongod"
+            - "--wiredTigerCacheSizeGB"
+            - "0.1"
+            - "--bind_ip"
+            - "0.0.0.0"
+        ports:
+        - containerPort: 27017
+        env: 
+          - name: MONGO_INITDB_ROOT_USERNAME
+            valueFrom:
+              secretKeyRef:
+                name: mongo-sec
+                key: username
+          - name: MONGO_INITDB_ROOT_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: mongo-sec
+                key: password
+        volumeMounts:
+          - name: mongo-volume
+            mountPath: /data/db
+      volumes: 
+      - name: mongo-volume
+        persistentVolumeClaim:
+          claimName: mongo-volume-claim
+========================================================================
+SVC YML MONGODB 
+============================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  namespace: three-tier
+  name: mongodb-svc
+spec:
+  selector:
+    app: mongodb
+  ports:
+  - name: mongodb-svc
+    protocol: TCP
+    port: 27017
+    targetPort: 27017
+=======================================================
+SECRET FOR MONGODB 
+==========================================
+apiVersion: v1
+kind: Secret
+metadata: 
+  namespace: three-tier
+  name: mongo-sec
+type: Opaque
+data:  
+  password: cGFzc3dvcmQxMjM=   #Three-Tier-Project
+  username: YWRtaW4= #admin
+
+================================================================
+PV MONGODB 
+=============================================
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: mongo-pv
+  namespace: three-tier
+spec:
+  capacity: 
+    storage: 1Gi
+  volumeMode: Filesystem
+  accessModes:
+    - ReadWriteOnce
+  hostPath:
+    path: /data/db
+=========================================================
+PVC MONGODB 
+=========================================================
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mongo-volume-claim
+  namespace: three-tier
+spec: 
+  accessModes:  
+    - ReadWriteOnce
+  storageClassName: ""
+  resources:
+    requests:
+      storage: 1Gi
+============================================================
+## It is used to apply the configuration defined in the deployment_mongo.yaml file to a Kubernetes cluster
+kubectl apply -f deployment_mongo.yaml
+
+## It is used to apply the configuration defined in the services.yaml file to a Kubernetes cluster
+kubectl apply -f service.yaml
+
+## It is used to apply the configuration defined in the secrets.yaml file to a Kubernetes cluster
+kubectl apply -f secets.yaml
+
+## It is used to apply the configuration defined in the pv.yaml file to a Kubernetes cluster
+kubectl apply -f pv.yaml
+
+## It is used to apply the configuration defined in the pvc.yaml file to a Kubernetes cluster
+kubectl apply -f pvc.yaml
+====================================================================================
+
+DEPLOYMENT FOR BACKEND.YML 
+========================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata: 
+  name: api
+  namespace: three-tier
+  labels: 
+    role: api
+    env: demo
+spec: 
+  replicas: 2
+  strategy: 
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 25%
+  selector: 
+    matchLabels:
+      role: api
+  template:
+    metadata:
+      labels:
+        role: api
+    spec:
+      imagePullSecrets:
+      - name: ecr-registry-secret
+      containers:
+      - name: api
+        image: 407622020962.dkr.ecr.us-east-1.amazonaws.com/backend:latest
+        imagePullPolicy: Always
+        env:
+          - name: MONGO_CONN_STR
+            value: mongodb://mongodb-svc:27017/todo?directConnection=true
+          - name: MONGO_USERNAME
+            valueFrom:
+              secretKeyRef:
+                name: mongo-sec
+                key: username
+          - name: MONGO_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: mongo-sec
+                key: password
+        ports:
+        - containerPort: 3500
+        livenessProbe: 
+          httpGet:
+            path: /ok
+            port: 3500
+          initialDelaySeconds: 2
+          periodSeconds: 5
+        readinessProbe:
+          httpGet:
+            path: /ok
+            port: 3500
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          successThreshold: 1
+==================================================================
+SVC BACKEND.YML 
+===============================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: api
+  namespace: three-tier
+spec: 
+  ports:
+  - port: 3500
+    protocol: TCP
+  type: ClusterIP
+  selector:
+    role: api
+=======================================================================
+FRONTEND.YML 
+======================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  namespace: three-tier
+  labels:
+    role: frontend
+    env: demo
+spec: 
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 25%
+  selector:
+    matchLabels: 
+      role: frontend
+  template:
+    metadata:
+      labels:
+        role: frontend
+    spec: 
+      imagePullSecrets:
+      - name: ecr-registry-secret
+      containers:
+      - name: frontend
+        image: 407622020962.dkr.ecr.us-east-1.amazonaws.com/frontend:latest
+        imagePullPolicy: Always
+        env:
+          - name: REACT_APP_BACKEND_URL
+            value: "http://backend.amanpathakdevops.study/api/tasks"
+        ports:
+        - containerPort: 3000
+=================================================
+SVC.YML FRONTEND 
+==================================================
+apiVersion: v1
+kind: Service
+metadata: 
+  name: frontend
+  namespace: three-tier
+spec:
+  ports:
+  - port: 3000
+    protocol: TCP
+  type: ClusterIP
+  selector:
+    role: frontend
+==========================================================
