@@ -1,0 +1,148 @@
+pipeline {
+    agent any
+    
+    tools {
+        // Define tools used in the pipeline
+        jdk 'jdk' // JDK tool named 'jdk' must be configured in Jenkins
+        nodejs 'nodejs' // Node.js tool named 'nodejs' must be configured in Jenkins
+    }
+    
+    environment {
+        // Define environment variables
+        SCANNER_HOME = tool name: 'scanner', type: 'hudson.model.ToolInstallation'
+    }
+    
+    stages {
+        stage('Cleaning Workspace') {
+            steps {
+                cleanWs() // Clean workspace before starting
+            }
+        }
+        
+        stage('Checkout from Git') {
+            steps {
+                git credentialsId: 'master', url: 'https://github.com/FortressTechnologiesInc/e2e-k8s-3-Tier-DevSecOps-Project.git'
+            }
+        }
+        
+        stage('Backend Sonarqube Analysis') {
+            steps {
+                dir('Application-Code/backend') {
+                    withSonarQubeEnv('sonar') {
+                        sh "$SCANNER_HOME/bin/sonar-scanner -Dsonar.projectName=3tier-backend -Dsonar.projectKey=3tier-backend"
+                    }
+                }
+            }
+        }
+        
+        stage('Frontend SonarQube Analysis') {
+            steps {
+                dir('Application-Code/frontend') {
+                    withSonarQubeEnv('sonar') {
+                        sh "$SCANNER_HOME/bin/sonar-scanner -Dsonar.projectName=3tier-frontend -Dsonar.projectKey=3tier-frontend"
+                    }
+                }
+            }
+        }
+        
+        stage('Quality Check') {
+            steps {
+                script {
+                    waitForQualityGate abortPipeline: false, credentialsId: 'sonar'
+                }
+            }
+        }
+        
+        stage('OWASP Backend Dependency-Check Scan') {
+            steps {
+                dir('Application-Code/backend') {
+                    dependencyCheck additionalArguments: '--scan ./ --disableYarnAudit --disableNodeAudit', odcInstallation: 'DC'
+                    dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
+                }
+            }
+        }
+        
+        stage('OWASP Frontend Dependency-Check Scan') {
+            steps {
+                dir('Application-Code/frontend') {
+                    dependencyCheck additionalArguments: '--scan ./ --disableYarnAudit --disableNodeAudit', odcInstallation: 'DP'
+                    dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
+                }
+            }
+        }
+        
+        stage('Trivy File Scan for Backend') {
+            steps {
+                dir('Application-Code/backend') {
+                    sh 'trivy fs . > trivyfs.txt'
+                }
+            }
+        }
+        
+        stage('Trivy File Scan for Frontend') {
+            steps {
+                dir('Application-Code/frontend') {
+                    sh 'trivy fs . > trivyfs.txt'
+                }
+            }
+        }
+        
+        stage('Docker Backend Image Build and Scan') {
+            steps {
+                script {
+                    withDockerRegistry(credentialsId: 'docker', toolName: 'docker') {
+                        dir('Application-Code/backend') {
+                            sh 'docker system prune -f'
+                            sh 'docker container prune -f'
+                            sh 'docker build -t iscanprint/3tierbackend:2.0 .'
+                            sh 'docker push iscanprint/3tierbackend:2.0'
+                            sh 'trivy image iscanprint/3tierbackend:2.0 > trivyimage.txt'
+                            sh 'docker rmi -f iscanprint/3tierbackend:2.0'
+                        }
+                    }
+                }
+            }
+        }
+        
+        stage('Docker Frontend Image Build and Scan') {
+            steps {
+                script {
+                    withDockerRegistry(credentialsId: 'docker', toolName: 'docker') {
+                        dir('Application-Code/frontend') {
+                            sh 'docker system prune -f'
+                            sh 'docker container prune -f'
+                            sh 'docker build -t iscanprint/3tierfrontend:2.0 .'
+                            sh 'docker push iscanprint/3tierfrontend:2.0'
+                            sh 'trivy image iscanprint/3tierfrontend:2.0 > trivyimage.txt'
+                            sh 'docker rmi -f iscanprint/3tierfrontend:2.0'
+                        }
+                    }
+                }
+            }
+        }
+        
+        stage('Deploy to Kubernetes') {
+            steps {
+                withKubeConfig(
+                    caCertificate: '', 
+                    clusterName: 'minikube', 
+                    contextName: '', 
+                    credentialsId: 'spjt', 
+                    namespace: '3tier', 
+                    restrictKubeConfigAccess: false, 
+                    serverUrl: 'https://192.168.49.2:8443'
+                ) {
+                    sh "kubectl apply -f /kubernetes-Manifests-file/backend.yml -n 3tier"
+                    sh "kubectl get pods -n 3tier"
+                    sh "kubectl get svc -n 3tier"
+                }
+            }
+        }
+        
+        stage('Clean Workspace After Deployment') {
+            steps {
+                cleanWs()
+            }
+        }
+    }
+}
