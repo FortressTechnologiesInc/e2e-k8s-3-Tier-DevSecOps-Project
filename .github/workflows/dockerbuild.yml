@@ -3,7 +3,7 @@ name: CI/CD Pipeline by Fortress Technologies Inc
 on:
   push:
     branches:
-      - main
+      - master
 
 jobs:
   build:
