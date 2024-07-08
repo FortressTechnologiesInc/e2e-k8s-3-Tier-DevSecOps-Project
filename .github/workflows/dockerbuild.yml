@@ -45,5 +45,5 @@ jobs:
       - name: Build and push frontendappz
         working-directory: Application-Code/frontend
         run: |
-          docker build -t iscanprint/frtndapp:2.1 . -f Dockerfile1
+          docker build -t iscanprint/frtndapp:2.1 . -f Dockerfile
           docker push iscanprint/frtndapp:2.1
